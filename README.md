@@ -1,4 +1,4 @@
-# Base Intel MCP — by SelfLabbs
+# Base Intel MCP — by Datakoot
 
 Read-only on-chain intelligence for AI agents on **Base**. No API keys.
 
@@ -19,7 +19,7 @@ No API keys required. Data read live from Base mainnet public RPC (with fallback
 ## Quick start (hosted)
 
 ```bash
-claude mcp add --transport http base-intel https://base.selflabbs.com/mcp
+claude mcp add --transport http base-intel https://base.datakoot.com/mcp
 ```
 
 ## Example agent workflows
@@ -28,7 +28,7 @@ claude mcp add --transport http base-intel https://base.selflabbs.com/mcp
 - "What token is 0x833589... and what is its supply?" -> `token_info`
 - "Did transaction 0x... succeed?" -> `tx_status`
 
-Part of [SelfLabbs](https://selflabbs.com) — intelligence APIs for AI agents.
+Part of [Datakoot](https://datakoot.com) — intelligence APIs for AI agents.
 
 ## License
 
