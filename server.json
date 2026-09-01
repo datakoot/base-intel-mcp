@@ -1,9 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.selflabbs/base-intel-mcp",
+  "name": "io.github.datakoot/base-onchain-wallet-tokens",
   "title": "Base Intel MCP",
   "description": "Read-only on-chain intelligence for AI agents on Base: balances, tokens, gas, tx status.",
-  "version": "1.0.0",
-  "repository": { "url": "https://github.com/selflabbs/base-intel-mcp", "source": "github" },
-  "remotes": [ { "type": "streamable-http", "url": "https://base.selflabbs.com/mcp" } ]
+  "version": "2.1.0",
+  "repository": {
+    "url": "https://github.com/datakoot/base-intel-mcp",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://base.datakoot.com/mcp"
+    }
+  ]
 }
