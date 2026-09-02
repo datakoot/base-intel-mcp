@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.datakoot/base-onchain-wallet-tokens",
+  "name": "com.datakoot/base-onchain-wallet-tokens",
   "title": "Base Intel MCP",
   "description": "Read-only on-chain intelligence for AI agents on Base: balances, tokens, gas, tx status.",
   "version": "2.1.0",
