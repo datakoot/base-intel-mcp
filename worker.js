@@ -9,6 +9,11 @@ const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Accept, Authorization" };
 class ToolError extends Error {}
 async function rpc(method, params) {
+  const cache = caches.default;
+  const ckey = new Request("https://base-rpc-cache.datakoot/" + encodeURIComponent(method) + "?p=" + encodeURIComponent(JSON.stringify(params || [])), { method: "GET" });
+  const hit = await cache.match(ckey); if (hit) { try { return await hit.json(); } catch (e) {} }
+  const n = await dkUpstreamCount(DK_BASE_UP);
+  if (n !== null && n > DK_BASE_UP.limit) throw new ToolError("Base RPC is briefly at its fair-use limit on our side to protect the shared public nodes \u2014 retry in a few seconds.");
   let lastErr = "no rpc";
   for (let i = 0; i < RPCS.length + 2; i++) {
     try {
@@ -16,7 +21,9 @@ async function rpc(method, params) {
       if (!r.ok) { lastErr = "HTTP " + r.status; continue; }
       const j = await r.json();
       if (j.error) { lastErr = j.error.message || "rpc error"; continue; }
-      RPC_CURSOR = (RPC_CURSOR + i) % RPCS.length; return j.result;
+      RPC_CURSOR = (RPC_CURSOR + i) % RPCS.length;
+      try { await cache.put(ckey, new Response(JSON.stringify(j.result === undefined ? null : j.result), { headers: { "Content-Type": "application/json", "Cache-Control": "max-age=" + DK_RPC_TTL } })); } catch (e) {}
+      return j.result;
     } catch (e) { lastErr = String((e && e.message) || e); }
   }
   throw new ToolError("Base RPC unavailable: " + lastErr);
@@ -143,6 +150,22 @@ async function bump(env, k, period) {
  * secret degrades privacy rather than taking the service down.
  */
 let DK_SALT = null, DK_KEY = null;
+// --- Base RPC caching + global breaker ---
+// The public Base RPCs rotate across five providers but nothing was cached, so a
+// flood hit them live. A 10s cache makes repeated reads free (balances and gas are
+// fresh enough at 10s), and a global breaker caps distinct-query pressure. Fails
+// open on any D1 problem.
+let DK_QDB = null;
+const DK_RPC_TTL = 10;
+const DK_BASE_UP = { key: "baserpc", win: 10, limit: 100 };
+const DK_UP_SQL = "INSERT INTO upstream_rl (k, n, exp) VALUES (?1, 1, ?2) ON CONFLICT(k) DO UPDATE SET n = n + 1 RETURNING n";
+async function dkUpstreamCount(u) {
+  if (!DK_QDB) return null;
+  const now = Math.floor(Date.now() / 1000); const bucket = Math.floor(now / u.win);
+  try { const row = await DK_QDB.prepare(DK_UP_SQL).bind("up:" + u.key + ":" + bucket, (bucket + 1) * u.win).first();
+        return row && typeof row.n === "number" ? row.n : null; }
+  catch (e) { return null; }
+}
 async function dkMacKey() {
   if (!DK_KEY) {
     DK_KEY = await crypto.subtle.importKey(
@@ -217,6 +240,7 @@ async function checkAccess(request, env) {
 export default {
   async fetch(request, env) {
     if (DK_SALT === null) DK_SALT = env.IP_SALT || "";
+    if (DK_QDB === null) DK_QDB = env.QUOTA_DB || false;
     const url = new URL(request.url);
     if (url.pathname.endsWith("/.well-known/owners.json")) return new Response(JSON.stringify({ $schema: "https://verifymcp.io/schemas/owners.json", owners: ["hello@datakoot.com"] }), { headers: { "Content-Type": "application/json" } });
     if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
