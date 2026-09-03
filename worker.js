@@ -51,8 +51,19 @@ async function addressReport(address) {
 async function tokenInfo(token) {
   if (!isAddr(token)) throw new ToolError("Invalid token address.");
   const p = await Promise.all([ ethCall(token, "0x06fdde03").catch(() => null), ethCall(token, "0x95d89b41").catch(() => null), ethCall(token, "0x313ce567").catch(() => null), ethCall(token, "0x18160ddd").catch(() => null) ]);
-  const decimals = p[2] ? Number(hexBig(p[2])) : null;
-  return { token, network: "base-mainnet", name: decodeAbiString(p[0]), symbol: decodeAbiString(p[1]), decimals, total_supply: p[3] && decimals != null ? formatUnits(hexBig(p[3]), decimals) : null };
+  // An empty "0x" response is truthy but means "no such method here". Treat it
+  // as absent so a wallet or non-token contract is not reported as a token with
+  // 0 decimals and 0 supply.
+  const nz = function (x) { return (x && x !== "0x") ? x : null; };
+  const name = decodeAbiString(p[0]);
+  const symbol = decodeAbiString(p[1]);
+  const decimals = nz(p[2]) != null ? Number(hexBig(p[2])) : null;
+  const total_supply = (nz(p[3]) != null && decimals != null) ? formatUnits(hexBig(p[3]), decimals) : null;
+  if (!name && !symbol && nz(p[3]) == null) {
+    return { token, network: "base-mainnet", is_erc20: false,
+      note: "No ERC-20 token found at this address. It returned no name, symbol or total supply, so it is probably a wallet or a non-token contract rather than a token." };
+  }
+  return { token, network: "base-mainnet", is_erc20: true, name: name, symbol: symbol, decimals: decimals, total_supply: total_supply };
 }
 async function tokenBalance(token, address) {
   if (!isAddr(token)) throw new ToolError("Invalid token address.");
