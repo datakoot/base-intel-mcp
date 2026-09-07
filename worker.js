@@ -107,7 +107,7 @@ async function runTool(name, a) {
 const rpcOk = (id, result) => ({ jsonrpc: "2.0", id, result });
 const rpcErrM = (id, code, message) => ({ jsonrpc: "2.0", id, error: { code, message } });
 const LANDING = "<!doctype html><meta charset=utf-8><title>Datakoot Base Intel MCP</title><style>body{font:16px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;background:#0b0e14;color:#e6e9ef}code{background:#131722;padding:2px 6px;border-radius:5px}a{color:#22d3ee}h1{color:#4ade80}</style><h1>Base Intel &mdash; MCP</h1><p>Read-only on-chain intelligence for AI agents, on <b>Base</b>. No API keys.</p><p><b>Endpoint:</b> <code>POST /mcp</code></p><p><b>Tools:</b> <code>address_report</code>, <code>token_info</code>, <code>token_balance</code>, <code>gas_now</code>, <code>tx_status</code>.</p><p>Part of <a href=https://datakoot.com>Datakoot</a>.</p>";
-const CTA_HTML = "<div style=\"max-width:760px;margin:24px auto;padding:16px 20px;border:1px solid #22d3ee55;border-radius:10px;background:#0f1420;font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;color:#e6e9ef\"><b style=\"color:#4ade80\">Pro &mdash; $15/mo</b> &middot; one key unlocks <b>all nine</b> Datakoot servers and includes 10,000 calls a month; past that it is $5 per 1,000, capped at $100. Free stays free: 100 calls a day, no key, no signup. <a href=\"https://datakoot.com/pricing\" style=\"color:#22d3ee\">See pricing &rarr;</a></div>";
+const CTA_HTML = "<div style=\"max-width:760px;margin:24px auto;padding:16px 20px;border:1px solid #22d3ee55;border-radius:10px;background:#0f1420;font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;color:#e6e9ef\"><b style=\"color:#4ade80\">Pro &mdash; $15/mo</b> &middot; one key unlocks <b>all nine</b> Datakoot servers and includes 50,000 calls a month with no daily limit. Free stays free: 100 calls a day, no key, no signup. <a href=\"https://datakoot.com/pricing\" style=\"color:#22d3ee\">See pricing &rarr;</a></div>";
 
 /* ------------------------------------------------- quota: D1 (atomic) ----
  * The free-tier counter used to live in KV. KV caches reads at the edge and
@@ -121,8 +121,7 @@ const CTA_HTML = "<div style=\"max-width:760px;margin:24px auto;padding:16px 20p
  *   quota(k TEXT PRIMARY KEY, period TEXT, n INTEGER, updated INTEGER)
  */
 const FREE_LIMIT = 100;          // anonymous, keyless, per UTC day
-const PRO_INCLUDED = 10000;      // calls included in Pro each month
-const OVERAGE_PER = 1000;        // then $5 per 1,000
+const PRO_INCLUDED = 50000;      // calls included in Pro each month
 const CHECKOUT = "https://buy.polar.sh/polar_cl_Q9y3qLrNbtsssN3w5m8SK56oNcruwrmxLEPnd34oAZf";
 const POLAR_ORG = "7f455043-0b15-4a1c-b7a0-9c06c9f3b95e";
 const BUMP_SQL =
@@ -211,12 +210,18 @@ async function checkAccess(request, env) {
       return { allowed: false, limit: FREE_LIMIT, remaining: 0,
         message: "That Datakoot API key was not recognised. Check it at https://datakoot.com/pricing, or remove the Authorization header to use the free tier (" + FREE_LIMIT + " calls/day, no signup)." };
     }
-    // Pro is metered but never blocked: overage is billed, not refused.
+    // Pro: 50,000 calls a month, no daily limit. Past the monthly bucket we do
+    // NOT bill overage and never hard-wall: soft-fall-back to the free daily
+    // allowance for the rest of the month, or top up.
     if (env.QUOTA_DB) {
-      try { await bump(env, "pro:" + (await sha96("dk1:" + key)), new Date().toISOString().slice(0, 7)); }
-      catch (e) { console.error("QUOTA error (pro):", e && e.message); }
+      try {
+        const used = await bump(env, "pro:" + (await sha96("dk1:" + key)), new Date().toISOString().slice(0, 7));
+        if (used <= PRO_INCLUDED) return { allowed: true, pro: true };
+        // bucket spent -> fall through to the free daily meter below (soft fallback)
+      } catch (e) { console.error("QUOTA error (pro):", e && e.message); return { allowed: true, pro: true }; }
+    } else {
+      return { allowed: true, pro: true };
     }
-    return { allowed: true, pro: true };
   }
 
   if (!env.QUOTA_DB) {
@@ -233,7 +238,7 @@ async function checkAccess(request, env) {
   }
   // The Nth call writes n = N, so call FREE_LIMIT is the last one allowed.
   if (n > FREE_LIMIT) return { allowed: false, limit: FREE_LIMIT, remaining: 0,
-    message: "Daily free limit reached (" + FREE_LIMIT + " calls). It resets at 00:00 UTC. Datakoot Pro includes " + PRO_INCLUDED.toLocaleString() + " calls a month across all nine servers for $15, then $5 per " + OVERAGE_PER.toLocaleString() + " — " + CHECKOUT };
+    message: "Daily free limit reached (" + FREE_LIMIT + " calls). It resets at 00:00 UTC. Datakoot Pro is " + PRO_INCLUDED.toLocaleString() + " calls a month across all nine servers for $15 with no daily limit — " + CHECKOUT };
   return { allowed: true, limit: FREE_LIMIT, remaining: FREE_LIMIT - n };
 }
 
