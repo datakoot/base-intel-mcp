@@ -1,0 +1,12 @@
+{
+  "name": "base-intel-mcp",
+  "private": true,
+  "type": "module",
+  "description": "Datakoot base MCP server (Cloudflare Worker). Production: https://base.datakoot.com/mcp. Local stdio: node stdio.mjs",
+  "scripts": {
+    "start": "node stdio.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
